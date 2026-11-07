@@ -17,25 +17,23 @@ jobs:
           ZIP_FILE=$(find . -maxdepth 1 -type f -iname '*starter*v2*.zip' | head -n 1)
           unzip -o "$ZIP_FILE"
 
-      - name: Fix Java and Kotlin versions
+      - name: Fix runOnUiThread
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          p = Path("GPT_ASSIST_Android_Starter/app/build.gradle")
+          p = Path("GPT_ASSIST_Android_Starter/app/src/main/java/com/example/gptassist/MainActivity.kt")
           s = p.read_text()
-          needle = "\ndependencies {"
-          i = s.index(needle)
-          j = s.rfind("\n}", 0, i)
-          s = s[:j] + """
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
-              }
-              kotlinOptions {
-                  jvmTarget = '17'
-              }
-          """ + s[j:]
-          p.write_text(s)
+          if "private fun runOnUiThread" not in s:
+              lines = s.splitlines()
+              i = next(i for i, line in enumerate(lines) if line.startswith("package "))
+              lines[i+1:i+1] = [
+                  "",
+                  "private fun runOnUiThread(action: () -> Unit) {",
+                  "    android.os.Handler(android.os.Looper.getMainLooper()).post(action)",
+                  "}",
+                  ""
+              ]
+              p.write_text("\n".join(lines) + "\n")
           PY
 
       - uses: actions/setup-java@v4
