@@ -1,54 +1,23 @@
 
-name: Build GPT ASSIST APK
-
-on:
-  workflow_dispatch:
-  push:
-    branches: [main]
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Extract project ZIP
-        run: |
-          ZIP_FILE=$(find . -maxdepth 1 -type f -iname '*starter*v2*.zip' | head -n 1)
-          unzip -o "$ZIP_FILE"
-
-      - name: Fix runOnUiThread
+      - name: Fix Java and Kotlin versions
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          p = Path("GPT_ASSIST_Android_Starter/app/src/main/java/com/example/gptassist/MainActivity.kt")
+          import re
+
+          p = Path("GPT_ASSIST_Android_Starter/app/build.gradle")
           s = p.read_text()
-          if "private fun runOnUiThread" not in s:
-              lines = s.splitlines()
-              i = max(i for i, line in enumerate(lines) if line.startswith("import "))
-              lines[i+1:i+1] = [
-                  "",
-                  "private fun runOnUiThread(action: () -> Unit) {",
-                  "    android.os.Handler(android.os.Looper.getMainLooper()).post(action)",
-                  "}",
-                  ""
-              ]
-              p.write_text("\n".join(lines) + "\n")
+
+          s = re.sub(
+              r'sourceCompatibility\s+JavaVersion\.VERSION_1_8',
+              'sourceCompatibility JavaVersion.VERSION_17', s)
+          s = re.sub(
+              r'targetCompatibility\s+JavaVersion\.VERSION_1_8',
+              'targetCompatibility JavaVersion.VERSION_17', s)
+          s = re.sub(
+              r'jvmTarget\s*=\s*["\']1\.8["\']',
+              "jvmTarget = '17'", s)
+
+          p.write_text(s)
+          print(s)
           PY
-
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.9'
-
-      - name: Build APK
-        run: gradle -p GPT_ASSIST_Android_Starter assembleDebug
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: GPT-ASSIST-APK
-          path: GPT_ASSIST_Android_Starter/app/build/outputs/apk/debug/app-debug.apk
