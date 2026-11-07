@@ -25,7 +25,7 @@ jobs:
           s = p.read_text()
           if "private fun runOnUiThread" not in s:
               lines = s.splitlines()
-              i = next(i for i, line in enumerate(lines) if line.startswith("package "))
+              i = max(i for i, line in enumerate(lines) if line.startswith("import "))
               lines[i+1:i+1] = [
                   "",
                   "private fun runOnUiThread(action: () -> Unit) {",
