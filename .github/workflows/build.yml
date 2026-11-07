@@ -1,4 +1,27 @@
 
+name: Build GPT ASSIST APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract project ZIP
+        run: |
+          ZIP_FILE=$(find . -maxdepth 1 -type f -iname '*starter*v2*.zip' | head -n 1)
+          if [ -z "$ZIP_FILE" ]; then
+            echo "ZIP file not found"
+            ls -la
+            exit 1
+          fi
+          unzip -o "$ZIP_FILE"
+
       - name: Fix Java and Kotlin versions
         run: |
           python3 - <<'PY'
@@ -14,10 +37,52 @@
           s = re.sub(
               r'targetCompatibility\s+JavaVersion\.VERSION_1_8',
               'targetCompatibility JavaVersion.VERSION_17', s)
-          s = re.sub(
-              r'jvmTarget\s*=\s*["\']1\.8["\']',
-              "jvmTarget = '17'", s)
+
+          if 'compileOptions {' not in s:
+              s = s.replace('dependencies {', """
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+              dependencies {
+              """, 1)
+          else:
+              s = re.sub(
+                  r'sourceCompatibility\s+JavaVersion\.VERSION_\d+',
+                  'sourceCompatibility JavaVersion.VERSION_17', s)
+              s = re.sub(
+                  r'targetCompatibility\s+JavaVersion\.VERSION_\d+',
+                  'targetCompatibility JavaVersion.VERSION_17', s)
+
+          if 'kotlinOptions {' not in s:
+              s = s.replace('dependencies {', """
+              kotlinOptions {
+                  jvmTarget = '17'
+              }
+              dependencies {
+              """, 1)
+          else:
+              s = re.sub(
+                  r'jvmTarget\s*=\s*[\'"][^\'"]+[\'"]',
+                  "jvmTarget = '17'", s)
 
           p.write_text(s)
-          print(s)
+          print("Java and Kotlin targets updated to 17")
           PY
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build APK
+        run: gradle -p GPT_ASSIST_Android_Starter assembleDebug
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GPT-ASSIST-APK
+          path: GPT_ASSIST_Android_Starter/app/build/outputs/apk/debug/app-debug.apk
